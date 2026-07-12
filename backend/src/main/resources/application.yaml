@@ -1,0 +1,52 @@
+spring:
+  application:
+    name: elearning-backend
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/elearning_db?options=-c%20timezone=UTC
+    username: elearning_user
+    password: elearning_pass
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+#    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+      jdbc:
+        time_zone: UTC
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migration: true
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
+
+server:
+  port: 8081
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+app:
+  jwt:
+    secret: ${JWT_SECRET:local-development-secret-key-for-elearning-platform-change-in-prod}
+    expiration-ms: 86400000
+  admin:
+    name: ${ADMIN_NAME:Admin}
+    email: ${ADMIN_EMAIL:admin@elearning.com}
+    password: ${ADMIN_PASSWORD:Admin@123}
+  storage:
+    type: ${STORAGE_TYPE:local}
+    local:
+      upload-dir: ${UPLOAD_DIR:uploads}
