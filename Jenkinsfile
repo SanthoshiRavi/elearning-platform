@@ -16,7 +16,7 @@ pipeline {
         stage('Build Backend') {
             steps {
                 dir('backend') {
-                    bat 'mvnw.cmd clean package -DskipTests'
+                    bat 'mvn clean package -DskipTests'
                 }
             }
         }
