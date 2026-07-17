@@ -1,0 +1,128 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: CloudFormation template for E-Learning Platform Network
+
+Resources:
+
+  # VPC
+  ElearningVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: Elearning-VPC
+
+
+  # Internet Gateway
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: Elearning-IGW
+
+
+  # Attach Internet Gateway
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref ElearningVPC
+      InternetGatewayId: !Ref InternetGateway
+
+
+  # Public Subnet
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref ElearningVPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: ap-south-1a
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: Public-Subnet
+
+
+  # Existing Private Subnet (Backend EC2)
+  PrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref ElearningVPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: ap-south-1a
+      Tags:
+        - Key: Name
+          Value: Private-Subnet-1
+
+
+  # New Private Subnet (RDS Requirement)
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref ElearningVPC
+      CidrBlock: 10.0.3.0/24
+      AvailabilityZone: ap-south-1b
+      Tags:
+        - Key: Name
+          Value: Private-Subnet-2
+
+
+  # Public Route Table
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref ElearningVPC
+      Tags:
+        - Key: Name
+          Value: Public-Route-Table
+
+
+  # Public Route
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+
+  # Associate Public Subnet
+  PublicSubnetAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+
+
+Outputs:
+
+  VpcId:
+    Description: VPC ID
+    Value: !Ref ElearningVPC
+    Export:
+      Name: elearning-network-VpcId
+
+
+  PublicSubnetId:
+    Description: Public Subnet ID
+    Value: !Ref PublicSubnet
+    Export:
+      Name: elearning-network-PublicSubnetId
+
+
+  PrivateSubnet1:
+    Description: Existing Private Subnet ID
+    Value: !Ref PrivateSubnet
+    Export:
+      Name: elearning-network-PrivateSubnet1
+
+
+  PrivateSubnet2:
+    Description: New Private Subnet ID for RDS
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: elearning-network-PrivateSubnet2

@@ -1,0 +1,235 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: Security Groups for E-Learning Platform
+
+Parameters:
+
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: Existing VPC ID created from 01-vpc.yaml
+
+  MyIP:
+    Type: String
+    Description: Your public IP address for SSH access
+    Default: 0.0.0.0/0
+
+
+Resources:
+
+# ---------------------------------------------------
+# Load Balancer Security Group
+# ---------------------------------------------------
+
+  LoadBalancerSecurityGroup:
+
+    Type: AWS::EC2::SecurityGroup
+
+    Properties:
+
+      GroupName: e-learning-lb-sg
+
+      GroupDescription: Allow HTTP HTTPS traffic
+
+      VpcId: !Ref VpcId
+
+
+      SecurityGroupIngress:
+
+
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+
+
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+
+
+
+      Tags:
+
+        - Key: Name
+          Value: e-learning-lb-sg
+
+
+
+# ---------------------------------------------------
+# Frontend Security Group
+# ---------------------------------------------------
+
+  FrontendSecurityGroup:
+
+
+    Type: AWS::EC2::SecurityGroup
+
+
+    Properties:
+
+
+      GroupName: e-learning-frontend-sg
+
+
+      GroupDescription: Allow traffic from Load Balancer
+
+
+      VpcId: !Ref VpcId
+
+
+
+      SecurityGroupIngress:
+
+
+        - IpProtocol: tcp
+
+          FromPort: 80
+
+          ToPort: 80
+
+          SourceSecurityGroupId: !Ref LoadBalancerSecurityGroup
+
+
+
+      Tags:
+
+        - Key: Name
+
+          Value: e-learning-frontend-sg
+
+
+
+
+# ---------------------------------------------------
+# Backend Security Group
+# ---------------------------------------------------
+
+
+  BackendSecurityGroup:
+
+
+    Type: AWS::EC2::SecurityGroup
+
+
+    Properties:
+
+
+      GroupName: e-learning-backend-sg
+
+
+      GroupDescription: Allow backend API traffic
+
+
+      VpcId: !Ref VpcId
+
+
+
+      SecurityGroupIngress:
+
+
+        - IpProtocol: tcp
+
+          FromPort: 8081
+
+          ToPort: 8081
+
+          SourceSecurityGroupId: !Ref FrontendSecurityGroup
+
+
+
+      Tags:
+
+        - Key: Name
+
+          Value: e-learning-backend-sg
+
+
+
+
+# ---------------------------------------------------
+# SSH Security Group
+# ---------------------------------------------------
+
+
+  SSHSecurityGroup:
+
+
+    Type: AWS::EC2::SecurityGroup
+
+
+    Properties:
+
+
+      GroupName: e-learning-ssh-sg
+
+
+      GroupDescription: Allow SSH access
+
+
+      VpcId: !Ref VpcId
+
+
+
+      SecurityGroupIngress:
+
+
+        - IpProtocol: tcp
+
+          FromPort: 22
+
+          ToPort: 22
+
+          CidrIp: !Ref MyIP
+
+
+
+      Tags:
+
+
+        - Key: Name
+
+          Value: e-learning-ssh-sg
+
+
+
+Outputs:
+
+
+  LoadBalancerSG:
+
+
+    Description: Load Balancer Security Group ID
+
+
+    Value: !Ref LoadBalancerSecurityGroup
+
+
+
+  FrontendSG:
+
+
+    Description: Frontend Security Group ID
+
+
+    Value: !Ref FrontendSecurityGroup
+
+
+
+  BackendSG:
+
+
+    Description: Backend Security Group ID
+
+
+    Value: !Ref BackendSecurityGroup
+
+
+
+  SSHSG:
+
+
+    Description: SSH Security Group ID
+
+
+    Value: !Ref SSHSecurityGroup

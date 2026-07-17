@@ -1,0 +1,94 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: VPC Interface Endpoints for AWS Systems Manager (SSM)
+
+Parameters:
+
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: Existing VPC ID
+
+  PrivateSubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: Private Subnet ID
+
+Resources:
+
+  EndpointSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security Group for SSM VPC Endpoints
+      VpcId: !Ref VpcId
+
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 10.0.0.0/16
+
+      Tags:
+        - Key: Name
+          Value: elearning-ssm-endpoint-sg
+
+  SSMEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcEndpointType: Interface
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.ssm"
+      VpcId: !Ref VpcId
+
+      SubnetIds:
+        - !Ref PrivateSubnetId
+
+      SecurityGroupIds:
+        - !Ref EndpointSecurityGroup
+
+      PrivateDnsEnabled: true
+
+  EC2MessagesEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcEndpointType: Interface
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.ec2messages"
+      VpcId: !Ref VpcId
+
+      SubnetIds:
+        - !Ref PrivateSubnetId
+
+      SecurityGroupIds:
+        - !Ref EndpointSecurityGroup
+
+      PrivateDnsEnabled: true
+
+  SSMMessagesEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcEndpointType: Interface
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.ssmmessages"
+      VpcId: !Ref VpcId
+
+      SubnetIds:
+        - !Ref PrivateSubnetId
+
+      SecurityGroupIds:
+        - !Ref EndpointSecurityGroup
+
+      PrivateDnsEnabled: true
+
+Outputs:
+
+  EndpointSecurityGroupId:
+    Description: Security Group for VPC Endpoints
+    Value: !Ref EndpointSecurityGroup
+
+  SSMEndpointId:
+    Description: SSM Endpoint ID
+    Value: !Ref SSMEndpoint
+
+  EC2MessagesEndpointId:
+    Description: EC2 Messages Endpoint ID
+    Value: !Ref EC2MessagesEndpoint
+
+  SSMMessagesEndpointId:
+    Description: SSM Messages Endpoint ID
+    Value: !Ref SSMMessagesEndpoint
