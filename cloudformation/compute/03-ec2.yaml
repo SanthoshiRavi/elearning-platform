@@ -1,0 +1,109 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: EC2 Instances for E-Learning Platform
+
+Parameters:
+  KeyPairName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Default: ec2key
+
+  PublicSubnetId:
+    Type: AWS::EC2::Subnet::Id
+
+  PrivateSubnetId:
+    Type: AWS::EC2::Subnet::Id
+
+  FrontendSecurityGroup:
+    Type: AWS::EC2::SecurityGroup::Id
+
+  BackendSecurityGroup:
+    Type: AWS::EC2::SecurityGroup::Id
+
+  SSHSecurityGroup:
+    Type: AWS::EC2::SecurityGroup::Id
+
+Resources:
+
+  EC2Role:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: elearning-ec2-role
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: elearning-instance-profile
+      Roles:
+        - !Ref EC2Role
+
+  FrontendEC2:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t3.micro
+      ImageId: !Sub "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}"
+      KeyName: !Ref KeyPairName
+      SubnetId: !Ref PublicSubnetId
+
+      SecurityGroupIds:
+        - !Ref FrontendSecurityGroup
+        - !Ref SSHSecurityGroup
+
+      IamInstanceProfile: !Ref EC2InstanceProfile
+
+      Tags:
+        - Key: Name
+          Value: elearning-frontend
+
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          dnf update -y
+          dnf install nginx -y
+          systemctl enable nginx
+          systemctl start nginx
+
+  BackendEC2:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: t3.micro
+      ImageId: !Sub "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}"
+      KeyName: !Ref KeyPairName
+      SubnetId: !Ref PrivateSubnetId
+
+      SecurityGroupIds:
+        - !Ref BackendSecurityGroup
+        - !Ref SSHSecurityGroup
+
+      IamInstanceProfile: !Ref EC2InstanceProfile
+
+      Tags:
+        - Key: Name
+          Value: elearning-backend
+
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          dnf update -y
+          dnf install java-21-amazon-corretto -y
+          mkdir -p /opt/backend
+
+Outputs:
+
+  FrontendInstanceId:
+    Description: Frontend EC2 Instance ID
+    Value: !Ref FrontendEC2
+
+  BackendInstanceId:
+    Description: Backend EC2 Instance ID
+    Value: !Ref BackendEC2
