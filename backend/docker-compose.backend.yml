@@ -1,0 +1,56 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: elearning-postgres
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: elearning_db
+      POSTGRES_USER: elearning_user
+      POSTGRES_PASSWORD: elearning_pass
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL","pg_isready -U elearning_user -d elearning_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    image: santhr/elearning-backend:latest
+    container_name: elearning-backend
+
+    restart: unless-stopped
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/elearning_db
+      SPRING_DATASOURCE_USERNAME: elearning_user
+      SPRING_DATASOURCE_PASSWORD: elearning_pass
+
+      JWT_SECRET: local-development-secret-key-for-elearning-platform-change-in-prod
+
+      ADMIN_NAME: Admin
+      ADMIN_EMAIL: admin@elearning.com
+      ADMIN_PASSWORD: Admin@123
+
+      STORAGE_TYPE: local
+      UPLOAD_DIR: /app/uploads
+
+    ports:
+      - "8081:8081"
+
+    volumes:
+      - backend_uploads:/app/uploads
+
+volumes:
+  postgres_data:
+  backend_uploads:
