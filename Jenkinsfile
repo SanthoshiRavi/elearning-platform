@@ -1,8 +1,8 @@
 pipeline {
     agent any
     tools {
-            maven 'Maven'
-        }
+        maven 'Maven'
+    }
     environment {
         DOCKERHUB_USERNAME = credentials('dockerhub-username')
         DOCKERHUB_TOKEN = credentials('dockerhub-token')
@@ -19,58 +19,53 @@ pipeline {
         stage('Build Backend') {
             steps {
                 dir('backend') {
-                    bat 'mvn clean package -DskipTests'
+                    sh 'mvn clean package -DskipTests'
                 }
             }
         }
         stage('Build Frontend') {
             steps {
                 dir('frontend') {
-                    bat 'npm install'
-                    bat 'npm run build'
+                    sh 'npm install'
+                    sh 'npm run build'
                 }
             }
         }
         stage('Docker Build') {
             steps {
-                bat """
-                docker build -t %BACKEND_IMAGE%:%IMAGE_TAG% ./backend
-                docker build -t %BACKEND_IMAGE%:latest ./backend
+                sh """
+                docker build -t ${BACKEND_IMAGE}:${IMAGE_TAG} ./backend
+                docker build -t ${BACKEND_IMAGE}:latest ./backend
 
-                docker build -t %FRONTEND_IMAGE%:%IMAGE_TAG% ./frontend
-                docker build -t %FRONTEND_IMAGE%:latest ./frontend
+                docker build -t ${FRONTEND_IMAGE}:${IMAGE_TAG} ./frontend
+                docker build -t ${FRONTEND_IMAGE}:latest ./frontend
                 """
             }
         }
         stage('Docker Login') {
             steps {
-                bat """
-                echo %DOCKERHUB_TOKEN% | docker login -u %DOCKERHUB_USERNAME% --password-stdin
-                """
+                sh 'echo ${DOCKERHUB_TOKEN} | docker login -u ${DOCKERHUB_USERNAME} --password-stdin'
             }
         }
         stage('Push Images') {
             steps {
-                bat """
-                docker push %BACKEND_IMAGE%:%IMAGE_TAG%
-                docker push %BACKEND_IMAGE%:latest
+                sh """
+                docker push ${BACKEND_IMAGE}:${IMAGE_TAG}
+                docker push ${BACKEND_IMAGE}:latest
 
-                docker push %FRONTEND_IMAGE%:%IMAGE_TAG%
-                docker push %FRONTEND_IMAGE%:latest
+                docker push ${FRONTEND_IMAGE}:${IMAGE_TAG}
+                docker push ${FRONTEND_IMAGE}:latest
                 """
             }
         }
         stage('Deploy') {
             when {
-                expression {
-                    return false
-                }
+                expression { return false }
             }
             steps {
                 echo "Deployment disabled for now"
             }
         }
-
     }
     post {
         success {
@@ -80,7 +75,7 @@ pipeline {
             echo 'Build Failed'
         }
         always {
-            bat 'docker logout'
+            sh 'docker logout'
         }
     }
 }
