@@ -1,6 +1,6 @@
 import axios from "axios";
 
-export const API_BASE_URL = "http://13.127.49.50:8081";
+export const API_BASE_URL = "/api";
 
 const apiClient = axios.create({baseURL: API_BASE_URL});
 apiClient.interceptors.request.use((config) => {
