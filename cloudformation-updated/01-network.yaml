@@ -1,0 +1,148 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: Networking resources for E-Learning Platform
+
+Resources:
+
+  #########################################################
+  # VPC
+  #########################################################
+
+  ElearningVPC:
+    Type: AWS::EC2::VPC
+
+    Properties:
+
+      CidrBlock: 10.0.0.0/16
+
+      EnableDnsSupport: true
+
+      EnableDnsHostnames: true
+
+      Tags:
+
+        - Key: Name
+          Value: elearning-vpc
+
+        - Key: Project
+          Value: elearning-platform
+
+  #########################################################
+  # Internet Gateway
+  #########################################################
+
+  InternetGateway:
+
+    Type: AWS::EC2::InternetGateway
+
+    Properties:
+
+      Tags:
+
+        - Key: Name
+          Value: elearning-igw
+
+  AttachGateway:
+
+    Type: AWS::EC2::VPCGatewayAttachment
+
+    Properties:
+
+      InternetGatewayId: !Ref InternetGateway
+
+      VpcId: !Ref ElearningVPC
+
+  #########################################################
+  # Public Subnet
+  #########################################################
+
+  PublicSubnet:
+
+    Type: AWS::EC2::Subnet
+
+    Properties:
+
+      VpcId: !Ref ElearningVPC
+
+      CidrBlock: 10.0.1.0/24
+
+      AvailabilityZone: !Select
+        - 0
+        - !GetAZs ''
+
+      MapPublicIpOnLaunch: true
+
+      Tags:
+
+        - Key: Name
+          Value: elearning-public-subnet
+
+        - Key: Project
+          Value: elearning-platform
+
+  #########################################################
+  # Route Table
+  #########################################################
+
+  PublicRouteTable:
+
+    Type: AWS::EC2::RouteTable
+
+    Properties:
+
+      VpcId: !Ref ElearningVPC
+
+      Tags:
+
+        - Key: Name
+          Value: elearning-public-route-table
+
+  #########################################################
+  # Internet Route
+  #########################################################
+
+  DefaultRoute:
+
+    Type: AWS::EC2::Route
+
+    DependsOn: AttachGateway
+
+    Properties:
+
+      RouteTableId: !Ref PublicRouteTable
+
+      DestinationCidrBlock: 0.0.0.0/0
+
+      GatewayId: !Ref InternetGateway
+
+  #########################################################
+  # Route Table Association
+  #########################################################
+
+  PublicSubnetAssociation:
+
+    Type: AWS::EC2::SubnetRouteTableAssociation
+
+    Properties:
+
+      RouteTableId: !Ref PublicRouteTable
+
+      SubnetId: !Ref PublicSubnet
+
+#########################################################
+# Outputs
+#########################################################
+
+Outputs:
+
+  VpcId:
+
+    Description: VPC ID
+
+    Value: !Ref ElearningVPC
+
+  PublicSubnetId:
+
+    Description: Public Subnet ID
+
+    Value: !Ref PublicSubnet

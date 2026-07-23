@@ -1,0 +1,181 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: Monitoring Server for E-Learning Platform
+
+Parameters:
+
+  KeyPairName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Default: ec2key
+
+  PublicSubnetId:
+    Type: AWS::EC2::Subnet::Id
+
+  MonitoringSecurityGroup:
+    Type: AWS::EC2::SecurityGroup::Id
+
+  SSHSecurityGroup:
+    Type: AWS::EC2::SecurityGroup::Id
+
+Resources:
+
+  #########################################################
+  # IAM ROLE
+  #########################################################
+
+  MonitoringRole:
+
+    Type: AWS::IAM::Role
+
+    Properties:
+
+      AssumeRolePolicyDocument:
+
+        Version: "2012-10-17"
+
+        Statement:
+
+          - Effect: Allow
+
+            Principal:
+
+              Service:
+                - ec2.amazonaws.com
+
+            Action:
+              - sts:AssumeRole
+
+      ManagedPolicyArns:
+
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+
+  #########################################################
+  # INSTANCE PROFILE
+  #########################################################
+
+  MonitoringInstanceProfile:
+
+    Type: AWS::IAM::InstanceProfile
+
+    Properties:
+
+      Roles:
+
+        - !Ref MonitoringRole
+
+  #########################################################
+  # EC2
+  #########################################################
+
+  MonitoringEC2:
+
+    Type: AWS::EC2::Instance
+
+    Properties:
+
+      InstanceType: t3.micro
+
+      ImageId: !Sub "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}"
+
+      KeyName: !Ref KeyPairName
+
+      SubnetId: !Ref PublicSubnetId
+
+      IamInstanceProfile: !Ref MonitoringInstanceProfile
+
+      SecurityGroupIds:
+
+        - !Ref MonitoringSecurityGroup
+
+        - !Ref SSHSecurityGroup
+
+      Tags:
+
+        - Key: Name
+          Value: elearning-monitoring
+
+        - Key: Project
+          Value: elearning-platform
+
+        - Key: Environment
+          Value: Development
+
+      UserData:
+
+        Fn::Base64: |
+          #!/bin/bash
+          set -eux
+
+          dnf update -y
+
+          dnf install -y \
+            docker \
+            git \
+            awscli
+
+          systemctl enable docker
+
+          systemctl start docker
+
+          usermod -aG docker ec2-user
+
+          mkdir -p /usr/libexec/docker/cli-plugins
+          curl -SL "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-$(uname -m)" \
+            -o /usr/libexec/docker/cli-plugins/docker-compose
+          chmod +x /usr/libexec/docker/cli-plugins/docker-compose
+
+  #########################################################
+  # Elastic IP
+  #########################################################
+
+  MonitoringElasticIP:
+
+    Type: AWS::EC2::EIP
+
+    Properties:
+
+      Domain: vpc
+
+      Tags:
+
+        - Key: Name
+          Value: elearning-monitoring-eip
+
+        - Key: Project
+          Value: elearning-platform
+
+  MonitoringElasticIPAssociation:
+
+    Type: AWS::EC2::EIPAssociation
+
+    Properties:
+
+      AllocationId: !GetAtt MonitoringElasticIP.AllocationId
+
+      InstanceId: !Ref MonitoringEC2
+
+#########################################################
+# Outputs
+#########################################################
+
+Outputs:
+
+  MonitoringInstanceId:
+
+    Description: Monitoring EC2 Instance ID
+
+    Value: !Ref MonitoringEC2
+
+  MonitoringPrivateIP:
+
+    Description: Monitoring Private IP
+
+    Value: !GetAtt MonitoringEC2.PrivateIp
+
+  MonitoringPublicIP:
+
+    Description: Monitoring Elastic IP
+
+    Value: !Ref MonitoringElasticIP

@@ -1,0 +1,223 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: Security Groups for E-Learning Platform
+
+Parameters:
+
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC ID from Network Stack
+
+  MyIP:
+    Type: String
+    Description: "Your Public IP in CIDR format (Example: 49.xxx.xxx.xxx/32)"
+
+Resources:
+
+  #########################################################
+  # Frontend Security Group
+  #########################################################
+
+  FrontendSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+
+    Properties:
+
+      GroupDescription: Security Group for Frontend EC2
+
+      VpcId: !Ref VpcId
+
+      SecurityGroupIngress:
+
+        - Description: HTTP
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+
+        - Description: HTTPS
+          IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+
+      SecurityGroupEgress:
+
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+
+      Tags:
+
+        - Key: Name
+          Value: elearning-frontend-sg
+
+        - Key: Project
+          Value: elearning-platform
+
+  #########################################################
+  # Backend Security Group
+  #########################################################
+
+  BackendSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+
+    Properties:
+
+      GroupDescription: Security Group for Backend EC2
+
+      VpcId: !Ref VpcId
+
+      SecurityGroupIngress:
+
+        - Description: Spring Boot API
+          IpProtocol: tcp
+          FromPort: 8081
+          ToPort: 8081
+          SourceSecurityGroupId: !Ref FrontendSecurityGroup
+
+      SecurityGroupEgress:
+
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+
+      Tags:
+
+        - Key: Name
+          Value: elearning-backend-sg
+
+        - Key: Project
+          Value: elearning-platform
+
+  #########################################################
+  # Jenkins Security Group
+  #########################################################
+
+  JenkinsSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+
+    Properties:
+
+      GroupDescription: Security Group for Jenkins EC2
+
+      VpcId: !Ref VpcId
+
+      SecurityGroupIngress:
+
+        - Description: Jenkins UI
+          IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          CidrIp: !Ref MyIP
+
+      SecurityGroupEgress:
+
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+
+      Tags:
+
+        - Key: Name
+          Value: elearning-jenkins-sg
+
+        - Key: Project
+          Value: elearning-platform
+
+  #########################################################
+  # Monitoring Security Group
+  #########################################################
+
+  MonitoringSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+
+    Properties:
+
+      GroupDescription: Security Group for Monitoring EC2
+
+      VpcId: !Ref VpcId
+
+      SecurityGroupIngress:
+
+        - Description: Grafana
+          IpProtocol: tcp
+          FromPort: 3000
+          ToPort: 3000
+          CidrIp: !Ref MyIP
+
+        - Description: Prometheus
+          IpProtocol: tcp
+          FromPort: 9090
+          ToPort: 9090
+          CidrIp: !Ref MyIP
+
+      SecurityGroupEgress:
+
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+
+      Tags:
+
+        - Key: Name
+          Value: elearning-monitoring-sg
+
+        - Key: Project
+          Value: elearning-platform
+
+  #########################################################
+  # SSH Security Group
+  #########################################################
+
+  SSHSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+
+    Properties:
+
+      GroupDescription: Security Group for SSH Access
+
+      VpcId: !Ref VpcId
+
+      SecurityGroupIngress:
+
+        - Description: SSH
+          IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref MyIP
+
+      SecurityGroupEgress:
+
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+
+      Tags:
+
+        - Key: Name
+          Value: elearning-ssh-sg
+
+        - Key: Project
+          Value: elearning-platform
+
+#########################################################
+# Outputs
+#########################################################
+
+Outputs:
+
+  FrontendSecurityGroup:
+    Description: Frontend Security Group ID
+    Value: !Ref FrontendSecurityGroup
+
+  BackendSecurityGroup:
+    Description: Backend Security Group ID
+    Value: !Ref BackendSecurityGroup
+
+  JenkinsSecurityGroup:
+    Description: Jenkins Security Group ID
+    Value: !Ref JenkinsSecurityGroup
+
+  MonitoringSecurityGroup:
+    Description: Monitoring Security Group ID
+    Value: !Ref MonitoringSecurityGroup
+
+  SSHSecurityGroup:
+    Description: SSH Security Group ID
+    Value: !Ref SSHSecurityGroup

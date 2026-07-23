@@ -1,0 +1,256 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: EC2 Infrastructure for E-Learning Platform
+
+Parameters:
+
+  KeyPairName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: Existing EC2 Key Pair
+    Default: ec2key
+
+  PublicSubnetId:
+    Type: AWS::EC2::Subnet::Id
+
+  FrontendSecurityGroup:
+    Type: AWS::EC2::SecurityGroup::Id
+
+  BackendSecurityGroup:
+    Type: AWS::EC2::SecurityGroup::Id
+
+  SSHSecurityGroup:
+    Type: AWS::EC2::SecurityGroup::Id
+
+Resources:
+
+  #########################################################
+  # IAM ROLE
+  #########################################################
+
+  EC2Role:
+
+    Type: AWS::IAM::Role
+
+    Properties:
+
+      AssumeRolePolicyDocument:
+
+        Version: "2012-10-17"
+
+        Statement:
+
+          - Effect: Allow
+
+            Principal:
+
+              Service:
+                - ec2.amazonaws.com
+
+            Action:
+              - sts:AssumeRole
+
+      ManagedPolicyArns:
+
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+
+  #########################################################
+  # INSTANCE PROFILE
+  #########################################################
+
+  EC2InstanceProfile:
+
+    Type: AWS::IAM::InstanceProfile
+
+    Properties:
+
+      Roles:
+
+        - !Ref EC2Role
+
+  #########################################################
+  # FRONTEND EC2
+  #########################################################
+
+  FrontendEC2:
+
+    Type: AWS::EC2::Instance
+
+    Properties:
+
+      InstanceType: t3.micro
+
+      ImageId: !Sub "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}"
+
+      KeyName: !Ref KeyPairName
+
+      SubnetId: !Ref PublicSubnetId
+
+      IamInstanceProfile: !Ref EC2InstanceProfile
+
+      SecurityGroupIds:
+
+        - !Ref FrontendSecurityGroup
+
+        - !Ref SSHSecurityGroup
+
+      Tags:
+
+        - Key: Name
+          Value: elearning-frontend
+
+        - Key: Project
+          Value: elearning-platform
+
+        - Key: Environment
+          Value: Development
+
+      UserData:
+
+        Fn::Base64: |
+          #!/bin/bash
+          set -eux
+
+          dnf update -y
+
+          dnf install -y \
+            docker \
+            git \
+            awscli
+
+          systemctl enable docker
+          systemctl start docker
+
+          usermod -aG docker ec2-user
+
+          mkdir -p /usr/libexec/docker/cli-plugins
+          curl -SL "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-$(uname -m)" \
+            -o /usr/libexec/docker/cli-plugins/docker-compose
+          chmod +x /usr/libexec/docker/cli-plugins/docker-compose
+  #########################################################
+  # BACKEND EC2
+  #########################################################
+
+  BackendEC2:
+
+    Type: AWS::EC2::Instance
+
+    Properties:
+
+      InstanceType: t3.micro
+
+      ImageId: !Sub "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}"
+
+      KeyName: !Ref KeyPairName
+
+      SubnetId: !Ref PublicSubnetId
+
+      IamInstanceProfile: !Ref EC2InstanceProfile
+
+      SecurityGroupIds:
+
+        - !Ref BackendSecurityGroup
+
+        - !Ref SSHSecurityGroup
+
+      Tags:
+
+        - Key: Name
+          Value: elearning-backend
+
+        - Key: Project
+          Value: elearning-platform
+
+        - Key: Environment
+          Value: Development
+
+      UserData:
+
+        Fn::Base64: |
+          #!/bin/bash
+          set -eux
+
+          dnf update -y
+
+          dnf install -y \
+            docker \
+            git \
+            awscli \
+            java-21-amazon-corretto
+
+          systemctl enable docker
+          systemctl start docker
+
+          usermod -aG docker ec2-user
+
+          mkdir -p /usr/libexec/docker/cli-plugins
+          curl -SL "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-$(uname -m)" \
+            -o /usr/libexec/docker/cli-plugins/docker-compose
+          chmod +x /usr/libexec/docker/cli-plugins/docker-compose
+
+  #########################################################
+  # FRONTEND ELASTIC IP
+  #########################################################
+
+  FrontendElasticIP:
+
+    Type: AWS::EC2::EIP
+
+    Properties:
+
+      Domain: vpc
+
+      Tags:
+
+        - Key: Name
+          Value: elearning-frontend-eip
+
+        - Key: Project
+          Value: elearning-platform
+
+  FrontendElasticIPAssociation:
+
+    Type: AWS::EC2::EIPAssociation
+
+    Properties:
+
+      AllocationId: !GetAtt FrontendElasticIP.AllocationId
+
+      InstanceId: !Ref FrontendEC2
+
+#########################################################
+# OUTPUTS
+#########################################################
+
+Outputs:
+
+  FrontendInstanceId:
+
+    Description: Frontend EC2 Instance ID
+
+    Value: !Ref FrontendEC2
+
+  BackendInstanceId:
+
+    Description: Backend EC2 Instance ID
+
+    Value: !Ref BackendEC2
+
+  FrontendPrivateIP:
+
+    Description: Frontend Private IP
+
+    Value: !GetAtt FrontendEC2.PrivateIp
+
+  BackendPrivateIP:
+
+    Description: Backend Private IP
+
+    Value: !GetAtt BackendEC2.PrivateIp
+
+  FrontendElasticIP:
+
+    Description: Frontend Elastic IP
+
+    Value: !Ref FrontendElasticIP
