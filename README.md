@@ -6,3 +6,4 @@ To run the application
 - run command `docker compose up -d` in terminal
 - Application will be accessible at http://localhost:3000
 - To check backend is running: http://localhost:8081/actuator/health
+- to be added more...
