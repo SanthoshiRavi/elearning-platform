@@ -63,9 +63,10 @@ pipeline {
             steps {
                 sshagent(credentials: ['ec2-ssh-key']) {
                     sh """
+                    scp -o StrictHostKeyChecking=no docker-compose-backend.yml ec2-user@${BACKEND_HOST}:~/docker-compose-backend.yml
                     ssh -o StrictHostKeyChecking=no ec2-user@${BACKEND_HOST} '
-                        docker compose -f docker-compose.backend.yml pull &&
-                        docker compose -f docker-compose.backend.yml up -d
+                        docker compose -f docker-compose-backend.yml pull &&
+                        docker compose -f docker-compose-backend.yml up -d
                     '
                     """
                 }
@@ -75,9 +76,10 @@ pipeline {
             steps {
                 sshagent(credentials: ['ec2-ssh-key']) {
                     sh """
+                    scp -o StrictHostKeyChecking=no docker-compose-frontend.yml ec2-user@${FRONTEND_HOST}:~/docker-compose-frontend.yml
                     ssh -o StrictHostKeyChecking=no ec2-user@${FRONTEND_HOST} '
-                        docker compose -f docker-compose.frontend.yml pull &&
-                        docker compose -f docker-compose.frontend.yml up -d
+                        docker compose -f docker-compose-frontend.yml pull &&
+                        docker compose -f docker-compose-frontend.yml up -d
                     '
                     """
                 }
