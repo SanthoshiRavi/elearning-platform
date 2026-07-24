@@ -34,10 +34,19 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        include: health,info,metrics,prometheus
+
   endpoint:
     health:
       show-details: always
+
+  metrics:
+    tags:
+      application: elearning-backend
+
+    export:
+      prometheus:
+        enabled: true
 app:
   jwt:
     secret: ${JWT_SECRET:local-development-secret-key-for-elearning-platform-change-in-prod}
