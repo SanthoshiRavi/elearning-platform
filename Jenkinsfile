@@ -65,9 +65,9 @@ pipeline {
                     sh """
                     scp -o StrictHostKeyChecking=no docker-compose.backend.yml ec2-user@${BACKEND_HOST}:~/docker-compose.backend.yml
                     ssh -o StrictHostKeyChecking=no ec2-user@${BACKEND_HOST} '
-                        docker compose -f docker-compose.backend.yml down --remove-orphans &&
-                        docker compose -f docker-compose.backend.yml pull &&
-                        docker compose -f docker-compose.backend.yml up -d
+                        docker compose -p elearning-backend -f docker-compose.backend.yml down --remove-orphans &&
+                        docker compose -p elearning-backend -f docker-compose.backend.yml pull &&
+                        docker compose -p elearning-backend -f docker-compose.backend.yml up -d
                     '
                     """
                 }
