@@ -78,32 +78,19 @@ pipeline {
                 }
             }
         }
-        stage('Deploy Monitoring') {
+        stage('Deploy Frontend') {
             steps {
                 sshagent(credentials: ['ec2-ssh-key']) {
                     sh """
-                    ssh -o StrictHostKeyChecking=no \
-                        ec2-user@${MONITORING_HOST} \
-                        'mkdir -p ~/monitoring'
+                    scp -o StrictHostKeyChecking=no deployment/frontend/docker-compose.frontend.yml \
+                        ec2-user@${FRONTEND_HOST}:~/docker-compose.frontend.yml
 
-                    scp \
-                        -o StrictHostKeyChecking=no \
-                        deployment/monitoring/docker-compose.monitoring.yml \
-                        ec2-user@${MONITORING_HOST}:~/monitoring/
-
-                    scp \
-                        -o StrictHostKeyChecking=no \
-                        deployment/monitoring/prometheus.yml \
-                        ec2-user@${MONITORING_HOST}:~/monitoring/
-
-                    ssh -o StrictHostKeyChecking=no ec2-user@${MONITORING_HOST} '
-                        cd ~/monitoring
+                    ssh -o StrictHostKeyChecking=no ec2-user@${FRONTEND_HOST} '
+                        docker compose \
+                            -f docker-compose.frontend.yml pull
 
                         docker compose \
-                            -f docker-compose.monitoring.yml pull
-
-                        docker compose \
-                            -f docker-compose.monitoring.yml up -d
+                            -f docker-compose.frontend.yml up -d
                     '
                     """
                 }
