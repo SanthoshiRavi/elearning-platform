@@ -79,6 +79,7 @@ pipeline {
                     sh """
                     scp -o StrictHostKeyChecking=no docker-compose.frontend.yml ec2-user@${FRONTEND_HOST}:~/docker-compose.frontend.yml
                     ssh -o StrictHostKeyChecking=no ec2-user@${FRONTEND_HOST} '
+                        docker compose -f docker-compose.frontend.yml down --remove-orphans &&
                         docker compose -f docker-compose.frontend.yml pull &&
                         docker compose -f docker-compose.frontend.yml up -d
                     '
