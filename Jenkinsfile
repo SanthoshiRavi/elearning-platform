@@ -1,6 +1,8 @@
 pipeline {
     agent any
     environment {
+        JAVA_HOME = '/usr/lib/jvm/java-21-amazon-corretto.x86_64'
+        PATH = "${JAVA_HOME}/bin:${env.PATH}"
         DOCKERHUB_USERNAME = credentials('dockerhub-username')
         DOCKERHUB_TOKEN = credentials('dockerhub-token')
         BACKEND_IMAGE = "${DOCKERHUB_USERNAME}/elearning-backend"
