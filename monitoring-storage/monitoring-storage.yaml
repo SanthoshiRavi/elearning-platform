@@ -1,0 +1,366 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Monitoring & storage stack: Prometheus, Node Exporter, and Grafana running
+  via Docker Compose on a single EC2 instance, with an EBS volume for live
+  data and an S3 bucket for backups/archival storage.
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC to launch the monitoring instance into
+
+  SubnetId:
+    Type: AWS::EC2::Subnet::Id
+    Description: Public subnet (needs a route to an Internet Gateway) to launch into
+
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: EC2 KeyPair for SSH access
+
+  InstanceType:
+    Type: String
+    Default: t3.medium
+    AllowedValues:
+      - t3.small
+      - t3.medium
+      - t3.large
+    Description: EC2 instance size (t3.medium recommended minimum for Prometheus+Grafana)
+
+  SSHLocation:
+    Type: String
+    Default: 0.0.0.0/0
+    Description: CIDR block allowed to SSH in (restrict this to your IP, e.g. 1.2.3.4/32)
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})'
+
+  DashboardAccessLocation:
+    Type: String
+    Default: 0.0.0.0/0
+    Description: CIDR block allowed to reach Grafana (3000) and Prometheus (9090) UIs. Restrict this in production.
+    AllowedPattern: '(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/(\d{1,2})'
+
+  DataVolumeSizeGiB:
+    Type: Number
+    Default: 20
+    MinValue: 10
+    Description: Size (GiB) of the EBS volume used for live Prometheus TSDB + Grafana data
+
+  GrafanaAdminPassword:
+    Type: String
+    NoEcho: true
+    MinLength: 8
+    Description: Initial admin password for Grafana (change it after first login)
+
+  StorageBucketName:
+    Type: String
+    Default: ''
+    Description: >
+      Optional explicit S3 bucket name for backups (must be globally unique).
+      Leave blank to let CloudFormation generate a unique name for you.
+
+  BackupRetentionDays:
+    Type: Number
+    Default: 30
+    MinValue: 1
+    Description: Number of days to retain backup objects in S3 before automatic deletion
+
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id
+    Description: Ubuntu 22.04 AMI, resolved automatically via SSM public parameter
+
+Conditions:
+  HasExplicitBucketName: !Not [!Equals [!Ref StorageBucketName, '']]
+
+Resources:
+
+  # ---------------- S3 Storage ----------------
+
+  MonitoringStorageBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !If [HasExplicitBucketName, !Ref StorageBucketName, !Ref 'AWS::NoValue']
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireOldBackups
+            Status: Enabled
+            ExpirationInDays: !Ref BackupRetentionDays
+            NoncurrentVersionExpiration:
+              NoncurrentDays: !Ref BackupRetentionDays
+      Tags:
+        - Key: Name
+          Value: monitoring-stack-storage
+
+  # ---------------- Networking / Security ----------------
+
+  MonitoringSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Prometheus/Grafana monitoring host
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref SSHLocation
+          Description: SSH access
+        - IpProtocol: tcp
+          FromPort: 3000
+          ToPort: 3000
+          CidrIp: !Ref DashboardAccessLocation
+          Description: Grafana UI
+        - IpProtocol: tcp
+          FromPort: 9090
+          ToPort: 9090
+          CidrIp: !Ref DashboardAccessLocation
+          Description: Prometheus UI
+      Tags:
+        - Key: Name
+          Value: monitoring-stack-sg
+
+  # ---------------- IAM ----------------
+
+  MonitoringInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: MonitoringBucketAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:ListBucket
+                  - s3:DeleteObject
+                Resource:
+                  - !GetAtt MonitoringStorageBucket.Arn
+                  - !Sub '${MonitoringStorageBucket.Arn}/*'
+      Tags:
+        - Key: Name
+          Value: monitoring-stack-role
+
+  MonitoringInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref MonitoringInstanceRole
+
+  # ---------------- Live/local storage (EBS) ----------------
+
+  DataVolume:
+    Type: AWS::EC2::Volume
+    Properties:
+      AvailabilityZone: !GetAtt MonitoringInstance.AvailabilityZone
+      Size: !Ref DataVolumeSizeGiB
+      VolumeType: gp3
+      Encrypted: true
+      Tags:
+        - Key: Name
+          Value: monitoring-stack-data
+
+  VolumeAttachment:
+    Type: AWS::EC2::VolumeAttachment
+    Properties:
+      InstanceId: !Ref MonitoringInstance
+      VolumeId: !Ref DataVolume
+      Device: /dev/xvdf
+
+  # ---------------- Compute ----------------
+
+  MonitoringInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      ImageId: !Ref LatestAmiId
+      KeyName: !Ref KeyName
+      SubnetId: !Ref SubnetId
+      SecurityGroupIds:
+        - !Ref MonitoringSecurityGroup
+      IamInstanceProfile: !Ref MonitoringInstanceProfile
+      Tags:
+        - Key: Name
+          Value: monitoring-stack
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -eux
+
+          # --- Wait for and format/mount the data EBS volume ---
+          while [ ! -e /dev/xvdf ]; do sleep 2; done
+          if ! blkid /dev/xvdf; then
+            mkfs -t ext4 /dev/xvdf
+          fi
+          mkdir -p /data
+          mount /dev/xvdf /data
+          echo '/dev/xvdf /data ext4 defaults,nofail 0 2' >> /etc/fstab
+
+          mkdir -p /data/prometheus /data/grafana /opt/monitoring /opt/monitoring/backup-scripts
+          chown -R 65534:65534 /data/prometheus   # nobody user (prometheus container default)
+          chown -R 472:472 /data/grafana          # grafana container default user
+
+          # --- Install Docker ---
+          apt-get update -y
+          apt-get install -y ca-certificates curl gnupg unzip
+          install -m 0755 -d /etc/apt/keyrings
+          curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+          chmod a+r /etc/apt/keyrings/docker.asc
+          echo \
+            "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+            $(. /etc/os-release && echo \"$VERSION_CODENAME\") stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+          apt-get update -y
+          apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+          systemctl enable --now docker
+
+          # --- AWS CLI (for S3 backup sync) ---
+          curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o /tmp/awscliv2.zip
+          unzip -q /tmp/awscliv2.zip -d /tmp
+          /tmp/aws/install
+
+          # --- Prometheus config: scrapes itself + the local node_exporter ---
+          cat > /opt/monitoring/prometheus.yml <<'EOF'
+          global:
+            scrape_interval: 15s
+
+          scrape_configs:
+            - job_name: 'prometheus'
+              static_configs:
+                - targets: ['localhost:9090']
+
+            - job_name: 'node_exporter'
+              static_configs:
+                - targets: ['node-exporter:9100']
+
+            # Add more static_configs targets here (or switch to file_sd/EC2 SD)
+            # to scrape node_exporter running on your other application servers.
+          EOF
+
+          # --- Docker Compose stack ---
+          cat > /opt/monitoring/docker-compose.yml <<EOF
+          version: '3.8'
+
+          services:
+            node-exporter:
+              image: prom/node-exporter:latest
+              container_name: node-exporter
+              restart: unless-stopped
+              network_mode: host
+              pid: host
+              volumes:
+                - /proc:/host/proc:ro
+                - /sys:/host/sys:ro
+                - /:/rootfs:ro
+              command:
+                - '--path.procfs=/host/proc'
+                - '--path.sysfs=/host/sys'
+                - '--path.rootfs=/rootfs'
+                - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+
+            prometheus:
+              image: prom/prometheus:latest
+              container_name: prometheus
+              restart: unless-stopped
+              ports:
+                - "9090:9090"
+              volumes:
+                - /opt/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+                - /data/prometheus:/prometheus
+              command:
+                - '--config.file=/etc/prometheus/prometheus.yml'
+                - '--storage.tsdb.path=/prometheus'
+                - '--storage.tsdb.retention.time=15d'
+                - '--web.enable-lifecycle'
+              extra_hosts:
+                - "node-exporter:127.0.0.1"
+
+            grafana:
+              image: grafana/grafana:latest
+              container_name: grafana
+              restart: unless-stopped
+              ports:
+                - "3000:3000"
+              environment:
+                - GF_SECURITY_ADMIN_PASSWORD=${GrafanaAdminPassword}
+              volumes:
+                - /data/grafana:/var/lib/grafana
+              depends_on:
+                - prometheus
+          EOF
+
+          cd /opt/monitoring
+          docker compose up -d
+
+          # --- S3 backup script: snapshots Prometheus TSDB + syncs Grafana data ---
+          cat > /opt/monitoring/backup-scripts/backup-to-s3.sh <<'EOF'
+          #!/bin/bash
+          set -euo pipefail
+          BUCKET="${MonitoringStorageBucket}"
+          DATE=$(date +%Y-%m-%d-%H%M)
+
+          # Trigger a Prometheus snapshot (requires --web.enable-lifecycle, set above)
+          SNAPSHOT_NAME=$(curl -s -XPOST http://localhost:9090/api/v1/admin/tsdb/snapshot \
+            | python3 -c "import sys,json;print(json.load(sys.stdin)['data']['name'])")
+
+          aws s3 sync "/data/prometheus/snapshots/$SNAPSHOT_NAME" \
+            "s3://$BUCKET/prometheus-snapshots/$DATE/" --only-show-errors
+
+          aws s3 sync /data/grafana "s3://$BUCKET/grafana-data/latest/" --only-show-errors
+
+          # Clean up the local snapshot copy once it's uploaded
+          rm -rf "/data/prometheus/snapshots/$SNAPSHOT_NAME"
+          EOF
+          chmod +x /opt/monitoring/backup-scripts/backup-to-s3.sh
+
+          # Run the backup daily at 02:00
+          echo "0 2 * * * root /opt/monitoring/backup-scripts/backup-to-s3.sh >> /var/log/monitoring-backup.log 2>&1" \
+            > /etc/cron.d/monitoring-backup
+          chmod 0644 /etc/cron.d/monitoring-backup
+
+Outputs:
+  InstanceId:
+    Description: EC2 instance ID of the monitoring host
+    Value: !Ref MonitoringInstance
+
+  PublicIP:
+    Description: Public IP of the monitoring host
+    Value: !GetAtt MonitoringInstance.PublicIp
+
+  GrafanaURL:
+    Description: Grafana dashboard URL (login as admin / the password you set)
+    Value: !Sub 'http://${MonitoringInstance.PublicIp}:3000'
+
+  PrometheusURL:
+    Description: Prometheus UI URL
+    Value: !Sub 'http://${MonitoringInstance.PublicIp}:9090'
+
+  DataVolumeId:
+    Description: EBS volume ID holding live Prometheus/Grafana data
+    Value: !Ref DataVolume
+
+  StorageBucketName:
+    Description: S3 bucket used for backups/archival storage
+    Value: !Ref MonitoringStorageBucket
+
+  StorageBucketArn:
+    Description: ARN of the S3 storage bucket
+    Value: !GetAtt MonitoringStorageBucket.Arn
