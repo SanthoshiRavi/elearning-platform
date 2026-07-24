@@ -8,6 +8,8 @@ pipeline {
         BACKEND_IMAGE = "${DOCKERHUB_USERNAME}/elearning-backend"
         FRONTEND_IMAGE = "${DOCKERHUB_USERNAME}/elearning-frontend"
         IMAGE_TAG = "${BUILD_NUMBER}"
+        BACKEND_HOST = "10.0.1.130"
+        FRONTEND_HOST = "10.0.1.69"
     }
     stages {
         stage('Checkout') {
@@ -57,18 +59,34 @@ pipeline {
                 """
             }
         }
-        stage('Deploy') {
-            when {
-                expression { return false }
-            }
+        stage('Deploy Backend') {
             steps {
-                echo "Deployment disabled for now"
+                sshagent(credentials: ['ec2-ssh-key']) {
+                    sh """
+                    ssh -o StrictHostKeyChecking=no ec2-user@${BACKEND_HOST} '
+                        docker compose -f docker-compose.backend.yml pull &&
+                        docker compose -f docker-compose.backend.yml up -d
+                    '
+                    """
+                }
+            }
+        }
+        stage('Deploy Frontend') {
+            steps {
+                sshagent(credentials: ['ec2-ssh-key']) {
+                    sh """
+                    ssh -o StrictHostKeyChecking=no ec2-user@${FRONTEND_HOST} '
+                        docker compose -f docker-compose.frontend.yml pull &&
+                        docker compose -f docker-compose.frontend.yml up -d
+                    '
+                    """
+                }
             }
         }
     }
     post {
         success {
-            echo 'Build Successful'
+            echo 'Build and Deploy Successful'
         }
         failure {
             echo 'Build Failed'
