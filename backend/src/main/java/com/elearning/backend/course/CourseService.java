@@ -112,7 +112,7 @@ public class CourseService {
                 .courseId(courseContent.getId())
                 .contentTitle(courseContent.getContentTitle())
                 .contentType(courseContent.getContentType().name())
-                .contentUrl(courseContent.getContentUrl())
+                .contentUrl(fileStorageService.getDownloadUrl(courseContent.getContentUrl()))
                 .sequenceOrder(courseContent.getSequenceOrder())
                 .createdAt(courseContent.getCreatedAt())
                 .build();

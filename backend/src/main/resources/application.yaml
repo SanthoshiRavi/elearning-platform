@@ -47,6 +47,10 @@ app:
     email: ${ADMIN_EMAIL:admin@elearning.com}
     password: ${ADMIN_PASSWORD:Admin@123}
   storage:
-    type: ${STORAGE_TYPE:local}
+    type: ${STORAGE_TYPE:s3}
     local:
       upload-dir: ${UPLOAD_DIR:uploads}
+    s3:
+      bucket-name: ${AWS_S3_BUCKET_NAME:}
+      region: ${AWS_REGION:ap-south-1}
+      preassigned-url-expiration-minutes: ${S3_PREASSIGNED_URL_EXPIRATION_MINUTES:10}

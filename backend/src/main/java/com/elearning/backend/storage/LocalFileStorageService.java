@@ -68,5 +68,10 @@ public class LocalFileStorageService implements FileStorageService{
         }
         return fileName.substring(dotIndex);
     }
+    @Override
+    public String getDownloadUrl(String storedFilePath)
+    {
+        return storedFilePath;
+    }
 }
 

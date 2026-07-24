@@ -7,4 +7,5 @@ public interface FileStorageService {
             Long courseId,
             ContentType contentType
     );
+    String getDownloadUrl(String storedFilePath);
 }

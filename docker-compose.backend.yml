@@ -40,8 +40,10 @@ services:
       ADMIN_EMAIL: admin@elearning.com
       ADMIN_PASSWORD: Admin@123
 
-      STORAGE_TYPE: local
-      UPLOAD_DIR: /app/uploads
+      STORAGE_TYPE: s3
+      AWS_S3_BUCKET_NAME: elearning-storage-coursecontentbucket-htmfhqqkv9sh
+      AWS_REGION: ap-south-1
+      S3_PRESIGNED_URL_EXPIRATION_MINUTES: 10
 
     ports:
       - "8081:8081"
