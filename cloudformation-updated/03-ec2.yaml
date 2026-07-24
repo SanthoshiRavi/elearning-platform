@@ -12,16 +12,181 @@ Parameters:
   PublicSubnetId:
     Type: AWS::EC2::Subnet::Id
 
-  FrontendSecurityGroup:
-    Type: AWS::EC2::SecurityGroup::Id
+  VpcId:
+    Type: AWS::EC2::VPC::Id
 
-  BackendSecurityGroup:
-    Type: AWS::EC2::SecurityGroup::Id
+  AdminIpCidr:
+    Type: String
+    Description: Your IP address (CIDR) allowed to SSH and access monitoring dashboards
+    Default: 0.0.0.0/0
 
-  SSHSecurityGroup:
+  JenkinsSecurityGroup:
     Type: AWS::EC2::SecurityGroup::Id
+    Description: Existing Security Group used by the Jenkins server
 
 Resources:
+
+  #########################################################
+  # SECURITY GROUPS
+  #########################################################
+
+  SSHSecurityGroup:
+
+    Type: AWS::EC2::SecurityGroup
+
+    Properties:
+
+      GroupDescription: Security Group for SSH access
+
+      VpcId: !Ref VpcId
+
+      SecurityGroupIngress:
+
+        - Description: SSH Access
+          IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref AdminIpCidr
+
+      Tags:
+
+        - Key: Name
+          Value: elearning-ssh-sg
+
+        - Key: Project
+          Value: elearning-platform
+
+  FrontendSecurityGroup:
+
+    Type: AWS::EC2::SecurityGroup
+
+    Properties:
+
+      GroupDescription: Security Group for Frontend EC2
+
+      VpcId: !Ref VpcId
+
+      SecurityGroupIngress:
+
+        - Description: HTTP Access
+          IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+
+        - Description: HTTPS Access
+          IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+
+      Tags:
+
+        - Key: Name
+          Value: elearning-frontend-sg
+
+        - Key: Project
+          Value: elearning-platform
+
+  BackendSecurityGroup:
+
+    Type: AWS::EC2::SecurityGroup
+
+    Properties:
+
+      GroupDescription: Security Group for Backend EC2
+
+      VpcId: !Ref VpcId
+
+      SecurityGroupIngress:
+
+        - Description: Spring Boot API
+          IpProtocol: tcp
+          FromPort: 8081
+          ToPort: 8081
+          SourceSecurityGroupId: !Ref FrontendSecurityGroup
+
+        - Description: Prometheus Metrics
+          IpProtocol: tcp
+          FromPort: 8081
+          ToPort: 8081
+          SourceSecurityGroupId: !Ref MonitoringSecurityGroup
+
+        - Description: Jenkins Health Check
+          IpProtocol: tcp
+          FromPort: 8081
+          ToPort: 8081
+          SourceSecurityGroupId: !Ref JenkinsSecurityGroup
+
+      Tags:
+
+        - Key: Name
+          Value: elearning-backend-sg
+
+        - Key: Project
+          Value: elearning-platform
+
+  MonitoringSecurityGroup:
+
+    Type: AWS::EC2::SecurityGroup
+
+    Properties:
+
+      GroupDescription: Security Group for Monitoring EC2 (Prometheus/Grafana)
+
+      VpcId: !Ref VpcId
+
+      SecurityGroupIngress:
+
+        - Description: Grafana Dashboard
+          IpProtocol: tcp
+          FromPort: 3000
+          ToPort: 3000
+          CidrIp: !Ref AdminIpCidr
+
+        - Description: Prometheus UI
+          IpProtocol: tcp
+          FromPort: 9090
+          ToPort: 9090
+          CidrIp: !Ref AdminIpCidr
+
+      Tags:
+
+        - Key: Name
+          Value: elearning-monitoring-sg
+
+        - Key: Project
+          Value: elearning-platform
+
+  #########################################################
+  # NODE EXPORTER INGRESS (added after SGs exist, avoids circular refs)
+  #########################################################
+
+  FrontendNodeExporterIngress:
+
+    Type: AWS::EC2::SecurityGroupIngress
+
+    Properties:
+
+      Description: Node Exporter metrics from Monitoring
+      GroupId: !Ref FrontendSecurityGroup
+      IpProtocol: tcp
+      FromPort: 9100
+      ToPort: 9100
+      SourceSecurityGroupId: !Ref MonitoringSecurityGroup
+
+  BackendNodeExporterIngress:
+
+    Type: AWS::EC2::SecurityGroupIngress
+
+    Properties:
+
+      Description: Node Exporter metrics from Monitoring
+      GroupId: !Ref BackendSecurityGroup
+      IpProtocol: tcp
+      FromPort: 9100
+      ToPort: 9100
+      SourceSecurityGroupId: !Ref MonitoringSecurityGroup
 
   #########################################################
   # IAM ROLE
@@ -32,6 +197,8 @@ Resources:
     Type: AWS::IAM::Role
 
     Properties:
+
+      RoleName: elearning-ec2-role
 
       AssumeRolePolicyDocument:
 
@@ -128,6 +295,7 @@ Resources:
           curl -SL "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-$(uname -m)" \
             -o /usr/libexec/docker/cli-plugins/docker-compose
           chmod +x /usr/libexec/docker/cli-plugins/docker-compose
+
   #########################################################
   # BACKEND EC2
   #########################################################
@@ -190,6 +358,70 @@ Resources:
           chmod +x /usr/libexec/docker/cli-plugins/docker-compose
 
   #########################################################
+  # MONITORING EC2
+  #########################################################
+
+  MonitoringEC2:
+
+    Type: AWS::EC2::Instance
+
+    Properties:
+
+      InstanceType: t3.micro
+
+      ImageId: !Sub "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64}}"
+
+      KeyName: !Ref KeyPairName
+
+      SubnetId: !Ref PublicSubnetId
+
+      IamInstanceProfile: !Ref EC2InstanceProfile
+
+      SecurityGroupIds:
+
+        - !Ref MonitoringSecurityGroup
+
+        - !Ref SSHSecurityGroup
+
+      Tags:
+
+        - Key: Name
+          Value: elearning-monitoring
+
+        - Key: Project
+          Value: elearning-platform
+
+        - Key: Environment
+          Value: Development
+
+      UserData:
+
+        Fn::Base64: |
+          #!/bin/bash
+          set -eux
+
+          dnf update -y
+
+          dnf install -y \
+            docker \
+            git \
+            awscli \
+            java-21-amazon-corretto
+
+          systemctl enable docker
+          systemctl start docker
+
+          usermod -aG docker ec2-user
+
+          mkdir -p /usr/libexec/docker/cli-plugins
+
+          curl -SL \
+          https://github.com/docker/compose/releases/latest/download/docker-compose-linux-$(uname -m) \
+          -o /usr/libexec/docker/cli-plugins/docker-compose
+
+          chmod +x /usr/libexec/docker/cli-plugins/docker-compose
+
+  #########################################################
   # FRONTEND ELASTIC IP
   #########################################################
 
@@ -218,6 +450,36 @@ Resources:
       AllocationId: !GetAtt FrontendElasticIP.AllocationId
 
       InstanceId: !Ref FrontendEC2
+
+  #########################################################
+  # MONITORING ELASTIC IP
+  #########################################################
+
+  MonitoringElasticIP:
+
+    Type: AWS::EC2::EIP
+
+    Properties:
+
+      Domain: vpc
+
+      Tags:
+
+        - Key: Name
+          Value: elearning-monitoring-eip
+
+        - Key: Project
+          Value: elearning-platform
+
+  MonitoringElasticIPAssociation:
+
+    Type: AWS::EC2::EIPAssociation
+
+    Properties:
+
+      AllocationId: !GetAtt MonitoringElasticIP.AllocationId
+
+      InstanceId: !Ref MonitoringEC2
 
 #########################################################
 # OUTPUTS
@@ -254,3 +516,45 @@ Outputs:
     Description: Frontend Elastic IP
 
     Value: !Ref FrontendElasticIP
+
+  MonitoringInstanceId:
+
+    Description: Monitoring EC2 Instance ID
+
+    Value: !Ref MonitoringEC2
+
+  MonitoringPrivateIP:
+
+    Description: Monitoring Private IP
+
+    Value: !GetAtt MonitoringEC2.PrivateIp
+
+  MonitoringElasticIP:
+
+    Description: Monitoring Elastic IP
+
+    Value: !Ref MonitoringElasticIP
+
+  FrontendSecurityGroupId:
+
+    Description: Frontend Security Group ID
+
+    Value: !Ref FrontendSecurityGroup
+
+  BackendSecurityGroupId:
+
+    Description: Backend Security Group ID
+
+    Value: !Ref BackendSecurityGroup
+
+  MonitoringSecurityGroupId:
+
+    Description: Monitoring Security Group ID
+
+    Value: !Ref MonitoringSecurityGroup
+
+  SSHSecurityGroupId:
+
+    Description: SSH Security Group ID
+
+    Value: !Ref SSHSecurityGroup

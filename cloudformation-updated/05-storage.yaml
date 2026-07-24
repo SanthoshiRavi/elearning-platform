@@ -1,0 +1,212 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: S3 Storage for E-Learning Platform Course Content
+
+Parameters:
+
+  ProjectName:
+    Type: String
+    Default: elearning
+
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - test
+      - prod
+
+  BucketName:
+    Type: String
+    Default: ""
+
+Conditions:
+
+  HasBucketName: !Not
+    - !Equals
+      - !Ref BucketName
+      - ""
+
+Resources:
+
+  ############################################################
+  # S3 Bucket
+  ############################################################
+
+  CourseContentBucket:
+
+    Type: AWS::S3::Bucket
+
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+
+    Properties:
+
+      BucketName: !If
+        - HasBucketName
+        - !Ref BucketName
+        - !Ref AWS::NoValue
+
+      VersioningConfiguration:
+        Status: Enabled
+
+      BucketEncryption:
+
+        ServerSideEncryptionConfiguration:
+
+          - ServerSideEncryptionByDefault:
+
+              SSEAlgorithm: AES256
+
+      OwnershipControls:
+
+        Rules:
+
+          - ObjectOwnership: BucketOwnerEnforced
+
+      PublicAccessBlockConfiguration:
+
+        BlockPublicAcls: true
+
+        IgnorePublicAcls: true
+
+        BlockPublicPolicy: true
+
+        RestrictPublicBuckets: true
+
+      LifecycleConfiguration:
+
+        Rules:
+
+          - Id: DeleteOldVersions
+
+            Status: Enabled
+
+            NoncurrentVersionExpirationInDays: 30
+
+          - Id: AbortMultipartUploads
+
+            Status: Enabled
+
+            AbortIncompleteMultipartUpload:
+
+              DaysAfterInitiation: 7
+
+      Tags:
+
+        - Key: Name
+          Value: elearning-course-content
+
+        - Key: Project
+          Value: !Ref ProjectName
+
+        - Key: Environment
+          Value: !Ref Environment
+
+  ############################################################
+  # Bucket Policy
+  ############################################################
+
+  CourseBucketPolicy:
+
+    Type: AWS::S3::BucketPolicy
+
+    Properties:
+
+      Bucket: !Ref CourseContentBucket
+
+      PolicyDocument:
+
+        Version: "2012-10-17"
+
+        Statement:
+
+          - Sid: DenyHTTP
+
+            Effect: Deny
+
+            Principal: "*"
+
+            Action: "s3:*"
+
+            Resource:
+
+              - !GetAtt CourseContentBucket.Arn
+
+              - !Sub "${CourseContentBucket.Arn}/*"
+
+            Condition:
+
+              Bool:
+
+                aws:SecureTransport: false
+
+  ############################################################
+  # IAM Policy attached to Backend EC2 Role
+  ############################################################
+
+  BackendS3Policy:
+
+    Type: AWS::IAM::Policy
+
+    Properties:
+
+      PolicyName: elearning-s3-storage-policy
+
+      Roles:
+
+        - elearning-ec2-role
+
+      PolicyDocument:
+
+        Version: "2012-10-17"
+
+        Statement:
+
+          - Sid: BucketList
+
+            Effect: Allow
+
+            Action:
+
+              - s3:ListBucket
+
+            Resource:
+
+              - !GetAtt CourseContentBucket.Arn
+
+          - Sid: ObjectAccess
+
+            Effect: Allow
+
+            Action:
+
+              - s3:GetObject
+
+              - s3:PutObject
+
+              - s3:DeleteObject
+
+            Resource:
+
+              - !Sub "${CourseContentBucket.Arn}/*"
+
+Outputs:
+
+  BucketName:
+
+    Description: S3 Bucket Name
+
+    Value: !Ref CourseContentBucket
+
+  BucketArn:
+
+    Description: S3 Bucket ARN
+
+    Value: !GetAtt CourseContentBucket.Arn
+
+  BucketRegionalDomain:
+
+    Description: Regional Domain Name
+
+    Value: !GetAtt CourseContentBucket.RegionalDomainName
