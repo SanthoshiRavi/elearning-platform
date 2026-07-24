@@ -33,7 +33,7 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()   // add this line
-                        .requestMatchers("/api/auth/**", "/actuator/health", "/actuator/info", "/uploads/**").permitAll()
+                        .requestMatchers("/api/auth/**", "/actuator/health", "/actuator/info", "/uploads/**", "/actuator/prometheus").permitAll()
                         .anyRequest().authenticated())
                 .authenticationProvider(authenticationProvider())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
