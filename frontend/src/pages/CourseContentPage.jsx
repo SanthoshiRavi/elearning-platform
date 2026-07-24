@@ -51,7 +51,7 @@ function CourseContentPage() {
                                 <h3>{content.contentTitle}</h3>
                                 <div className="card-actions">
                                     <a
-                                        href={`${API_BASE_URL}${content.contentUrl}`}
+                                        href={content.contentUrl}
                                         target="_blank"
                                         rel="noreferrer"
                                         className="btn btn-primary"
