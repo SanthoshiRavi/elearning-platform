@@ -191,6 +191,16 @@ Resources:
 
               - !Sub "${CourseContentBucket.Arn}/*"
 
+  ############################################################
+  # SSM Parameter
+  ############################################################
+  CourseContentBucketParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /elearning/storage/course-content-bucket
+      Type: String
+      Value: !Ref CourseContentBucket
+      Description: E-Learning Platform Course Content S3 Bucket Name
 Outputs:
 
   BucketName:
@@ -210,3 +220,9 @@ Outputs:
     Description: Regional Domain Name
 
     Value: !GetAtt CourseContentBucket.RegionalDomainName
+
+  BucketParameterName:
+
+    Description: SSM Parameter containing S3 Bucket Name
+
+    Value: !Ref CourseContentBucketParameter

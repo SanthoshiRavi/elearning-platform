@@ -8,14 +8,17 @@ pipeline {
         BACKEND_IMAGE = "${DOCKERHUB_USERNAME}/elearning-backend"
         FRONTEND_IMAGE = "${DOCKERHUB_USERNAME}/elearning-frontend"
         IMAGE_TAG = "${BUILD_NUMBER}"
-        BACKEND_HOST = "10.0.1.130"
-        FRONTEND_HOST = "10.0.1.69"
-        MONITORING_HOST = "10.0.1.216"
     }
     stages {
         stage('Checkout') {
             steps {
                 checkout scm
+            }
+        }
+        stage('Load Infrastructure Configuration')
+        {
+            steps {
+                script
             }
         }
         stage('Build Backend') {

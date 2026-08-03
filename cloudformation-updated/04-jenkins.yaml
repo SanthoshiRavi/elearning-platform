@@ -51,6 +51,19 @@ Resources:
 
         - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
 
+      Policies:
+        - PolicyName: ParameterStoreReadAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  - ssm:GetParameters
+                  - ssm:GetParametersByPath
+                Resource:
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/elearning/*
+
   #########################################################
   # INSTANCE PROFILE
   #########################################################

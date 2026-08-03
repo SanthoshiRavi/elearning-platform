@@ -420,7 +420,30 @@ Resources:
           -o /usr/libexec/docker/cli-plugins/docker-compose
 
           chmod +x /usr/libexec/docker/cli-plugins/docker-compose
-
+  #########################################################
+  # SSM Parameters
+  #########################################################
+  FrontendPrivateIPParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /elearning/infrastructure/frontend-private-ip
+      Type: String
+      Value: !GetAtt FrontendEC2.PrivateIp
+      Description: Frontend EC2 Private IP
+  BackendPrivateIPParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /elearning/infrastructure/backend-private-ip
+      Type: String
+      Value: !GetAtt BackendEC2.PrivateIp
+      Description: Backend EC2 Private IP
+  MonitoringPrivateIPParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /elearning/infrastructure/monitoring-private-ip
+      Type: String
+      Value: !GetAtt MonitoringEC2.PrivateIp
+      Description: Monitoring EC2 Private IP
   #########################################################
   # FRONTEND ELASTIC IP
   #########################################################
@@ -558,3 +581,21 @@ Outputs:
     Description: SSH Security Group ID
 
     Value: !Ref SSHSecurityGroup
+
+  FrontendPrivateIPParameterName:
+
+    Description: SSM Parameter containing Frontend Private IP
+
+    Value: !Ref FrontendPrivateIPParameter
+
+  BackendPrivateIPParameterName:
+
+    Description: SSM Parameter containing Backend Private IP
+
+    Value: !Ref BackendPrivateIPParameter
+
+  MonitoringPrivateIPParameterName:
+
+    Description: SSM Parameter containing Monitoring Private IP
+
+    Value: !Ref MonitoringPrivateIPParameter

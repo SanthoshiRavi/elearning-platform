@@ -19,9 +19,7 @@ services:
       timeout: 5s
       retries: 5
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    image: santhr/elearning-backend:latest
     container_name: elearning-backend
     restart: unless-stopped
     depends_on:
@@ -42,15 +40,13 @@ services:
     volumes:
       - ./backend/uploads:/app/uploads
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
+    image: santhr/elearning-frontend:latest
     container_name: elearning-frontend
     restart: unless-stopped
     depends_on:
       - backend
     ports:
-      - "3000:80"
+      - "80:80"
 volumes:
   postgres_data:
   backend_uploads:
