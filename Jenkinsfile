@@ -98,6 +98,22 @@ pipeline {
                 """
             }
         }
+        stage('Generate Prometheus Configuration')
+        {
+            steps {
+                sh '''
+                echo "Generating Prometheus configuration..."
+                sed \
+                -e "s|\\${FRONTEND_HOST}|${FRONTEND_HOST}|g" \
+                -e "s|\\${BACKEND_HOST}|${BACKEND_HOST}|g" \
+                -e "s|\\${MONITORING_HOST}|${MONITORING_HOST}|g" \
+                deployment/monitoring/prometheus.yml.template
+                > deployment/monitoring/prometheus.yml
+
+                echo "Prometheus configuration generated successfully."
+                '''
+            }
+        }
         stage('Deploy Backend') {
             steps {
                 sshagent(credentials: ['ec2-ssh-key']) {
@@ -188,7 +204,10 @@ pipeline {
             echo 'Build Failed'
         }
         always {
-            sh 'docker logout'
+            sh '''
+            rm -f deployment/monitoring/prometheus.yml
+            docker logout || true
+            '''
         }
     }
 }
