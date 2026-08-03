@@ -8,6 +8,9 @@ pipeline {
         BACKEND_IMAGE = "${DOCKERHUB_USERNAME}/elearning-backend"
         FRONTEND_IMAGE = "${DOCKERHUB_USERNAME}/elearning-frontend"
         IMAGE_TAG = "${BUILD_NUMBER}"
+        BACKEND_HOST = "10.0.1.130"
+        FRONTEND_HOST = "10.0.1.69"
+        MONITORING_HOST = "10.0.1.216"
     }
     stages {
         stage('Checkout') {
@@ -18,7 +21,39 @@ pipeline {
         stage('Load Infrastructure Configuration')
         {
             steps {
-                script
+                script {
+                    env.FRONTEND_HOST = sh (script: """
+                    aws ssm get-parameter \
+                    --name /elearning/infrastructure/frontend-private-ip \
+                    --query Parameter.Value \
+                    --output text
+                    """,returnStdout: true
+                    ).trim()
+                    env.BACKEND_HOST = sh (script: """
+                    aws ssm get-parameter \
+                    --name /elearning/infrastructure/backend-private-ip \
+                    --query Parameter.Value \
+                    --output text
+                    """,returnStdout: true
+                    ).trim()
+                    env.MONITORING_HOST = sh (script: """
+                    aws ssm get-parameter \
+                    --name /elearning/infrastructure/monitoring-private-ip \
+                    --query Parameter.Value \
+                    --output text
+                    """,returnStdout: true
+                    ).trim()
+                    env.S3_BUCKET_NAME = sh (script: """
+                    aws ssm get-parameter \
+                    --name /elearning/storage/course-content-bucket \
+                    --query Parameter.Value \
+                    --output text
+                    """,returnStdout: true
+                    ).trim()
+                    echo "Frontend Host: ${env.FRONTEND_HOST}"
+                    echo "Backend Host: ${env.BACKEND_HOST}"
+                    echo "Monitoring Host: ${env.MONITORING_HOST}"
+                }
             }
         }
         stage('Build Backend') {
