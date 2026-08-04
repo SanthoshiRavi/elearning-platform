@@ -116,19 +116,55 @@ pipeline {
         }
         stage('Deploy Backend') {
             steps {
-                sshagent(credentials: ['ec2-ssh-key']) {
-                    sh """
-                    scp -o StrictHostKeyChecking=no deployment/backend/docker-compose.backend.yml \
-                        ec2-user@${BACKEND_HOST}:~/docker-compose.backend.yml
+                withCredentials([
+                    string(credentialsId: 'postgres-password', variable: 'POSTGRES_PASSWORD'),
+                    string(credentialsId: 'jwt-secret', variable: 'JWT_SECRET'),
+                    string(credentialsId: 'admin-password', variable: 'ADMIN_PASSWORD')
+                ]) {
 
-                    ssh -o StrictHostKeyChecking=no ec2-user@${BACKEND_HOST} '
-                        docker compose -p elearning-backend \
-                            -f docker-compose.backend.yml pull
+                    sshagent(credentials: ['ec2-ssh-key']) {
 
-                        docker compose -p elearning-backend \
-                            -f docker-compose.backend.yml up -d
-                    '
-                    """
+                        sh """
+                        printf '%s\n' \
+                        'POSTGRES_DB=elearning_db' \
+                        'POSTGRES_USER=elearning_user' \
+                        'POSTGRES_PASSWORD=${POSTGRES_PASSWORD}' \
+                        'SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/elearning_db' \
+                        'SPRING_DATASOURCE_USERNAME=elearning_user' \
+                        'SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD}' \
+                        'JWT_SECRET=${JWT_SECRET}' \
+                        'ADMIN_NAME=admin' \
+                        'ADMIN_EMAIL=admin@elearning.com' \
+                        'ADMIN_PASSWORD=${ADMIN_PASSWORD}' \
+                        'STORAGE_TYPE=s3' \
+                        'AWS_S3_BUCKET_NAME=${S3_BUCKET_NAME}' \
+                        'AWS_REGION=ap-south-1' \
+                        'S3_PRESIGNED_URL_EXPIRATION_MINUTES=10' \
+                        > deployment/backend/.env.backend
+
+                        scp -o StrictHostKeyChecking=no \
+                            deployment/backend/docker-compose.backend.yml \
+                            ec2-user@${BACKEND_HOST}:~/docker-compose.backend.yml
+
+                        scp -o StrictHostKeyChecking=no \
+                            deployment/backend/.env.backend \
+                            ec2-user@${BACKEND_HOST}:~/.env.backend
+
+                        ssh -o StrictHostKeyChecking=no ec2-user@${BACKEND_HOST} '
+                            docker compose \
+                                --env-file ~/.env.backend \
+                                -p elearning-backend \
+                                -f docker-compose.backend.yml \
+                                pull
+
+                            docker compose \
+                                --env-file ~/.env.backend \
+                                -p elearning-backend \
+                                -f docker-compose.backend.yml \
+                                up -d --remove-orphans
+                        '
+                        """
+                    }
                 }
             }
         }

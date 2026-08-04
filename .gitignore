@@ -29,3 +29,5 @@ deployment/monitoring/prometheus.yml
 .env.*
 !.env.example
 deployment/frontend/.env.frontend
+deployment/backend/.env.backend
+deployment/monitoring/.env.monitoring
