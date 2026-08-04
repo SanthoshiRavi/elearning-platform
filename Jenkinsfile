@@ -214,14 +214,14 @@ pipeline {
 
                 echo "Checking Prometheus..."
                 curl --retry 20 --retry-delay 5 http://${MONITORING_HOST}:9090/-/healthy
-                sh """
+
                 echo "Checking Grafana..."
                 curl \
                   --retry 30 \
                   --retry-delay 10 \
                   --retry-connrefused \
                   http://${MONITORING_HOST}:3000/api/health
-                """
+
             }
         }
     }
