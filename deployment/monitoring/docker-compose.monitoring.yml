@@ -27,9 +27,8 @@ services:
     ports:
       - "3000:3000"
 
-    environment:
-      GF_SECURITY_ADMIN_USER: admin
-      GF_SECURITY_ADMIN_PASSWORD: admin123
+    env_file:
+      - .env.monitoring
 
     volumes:
       - grafana_data:/var/lib/grafana

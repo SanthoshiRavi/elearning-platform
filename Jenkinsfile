@@ -212,40 +212,65 @@ pipeline {
         }
         stage('Deploy Monitoring') {
             steps {
-                sshagent(credentials: ['ec2-ssh-key']) {
-                    sh """
-                    ssh -o StrictHostKeyChecking=no \
-                        ec2-user@${MONITORING_HOST} \
-                        'mkdir -p ~/monitoring'
+                withCredentials([
+                    string(credentialsId: 'grafana-admin-password', variable: 'GRAFANA_PASSWORD')
+                ]) {
+                    sshagent(credentials: ['ec2-ssh-key']) {
+                        sh """
+                        echo "Creating monitoring runtime configuration..."
 
-                    scp \
-                        -o StrictHostKeyChecking=no \
-                        deployment/monitoring/docker-compose.monitoring.yml \
-                        ec2-user@${MONITORING_HOST}:~/monitoring/
+                        printf "GRAFANA_PASSWORD=%s\n" "${GRAFANA_PASSWORD}" \
+                            > deployment/monitoring/.env.monitoring
 
-                    scp \
-                        -o StrictHostKeyChecking=no \
-                        deployment/monitoring/prometheus.yml \
-                        ec2-user@${MONITORING_HOST}:~/monitoring/
+                        ssh -o StrictHostKeyChecking=no \
+                            ec2-user@${MONITORING_HOST} \
+                            'mkdir -p ~/monitoring'
 
-                    ssh -o StrictHostKeyChecking=no ec2-user@${MONITORING_HOST} '
-                        cd ~/monitoring
+                        scp -o StrictHostKeyChecking=no \
+                            deployment/monitoring/docker-compose.monitoring.yml \
+                            ec2-user@${MONITORING_HOST}:~/monitoring/
 
-                        docker compose \
-                            -f docker-compose.monitoring.yml pull
+                        scp -o StrictHostKeyChecking=no \
+                            deployment/monitoring/prometheus.yml \
+                            ec2-user@${MONITORING_HOST}:~/monitoring/
 
-                        docker compose \
-                            -f docker-compose.monitoring.yml up -d
-                    '
-                    """
+                        scp -o StrictHostKeyChecking=no \
+                            deployment/monitoring/.env.monitoring \
+                            ec2-user@${MONITORING_HOST}:~/monitoring/
+
+                        ssh -o StrictHostKeyChecking=no \
+                            ec2-user@${MONITORING_HOST} '
+                            cd ~/monitoring
+
+                            chmod 600 .env.monitoring
+
+                            docker compose \
+                                --env-file .env.monitoring \
+                                -f docker-compose.monitoring.yml \
+                                pull
+
+                            docker compose \
+                                --env-file .env.monitoring \
+                                -f docker-compose.monitoring.yml \
+                                up -d --remove-orphans
+                        '
+                        """
+                    }
                 }
             }
         }
         stage('Health Check') {
             steps {
                 sh """
+                echo "Waiting for backend to start..."
+                sleep 60
+
                 echo "Checking Backend..."
-                curl --retry 20 --retry-delay 5 http://${BACKEND_HOST}:8081/actuator/health
+                curl \
+                --retry 30 \
+                --retry-delay 10 \
+                --retry-connrefused \
+                http://${BACKEND_HOST}:8081/actuator/health
 
                 echo "Checking Prometheus..."
                 curl --retry 20 --retry-delay 5 http://${MONITORING_HOST}:9090/-/healthy
@@ -272,6 +297,7 @@ pipeline {
             sh '''
             rm -f deployment/backend/.env.backend
             rm -f deployment/frontend/.env.frontend
+            rm -f deployment/monitoring/.env.monitoring
             rm -f deployment/monitoring/prometheus.yml
             docker logout || true
             '''
