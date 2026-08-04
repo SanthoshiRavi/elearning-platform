@@ -136,16 +136,41 @@ pipeline {
             steps {
                 sshagent(credentials: ['ec2-ssh-key']) {
                     sh """
-                    scp -o StrictHostKeyChecking=no deployment/frontend/docker-compose.frontend.yml \
-                        ec2-user@${FRONTEND_HOST}:~/docker-compose.frontend.yml
+                        echo "Creating frontend runtime configuration..."
 
-                    ssh -o StrictHostKeyChecking=no ec2-user@${FRONTEND_HOST} '
-                        docker compose \
-                            -f docker-compose.frontend.yml pull
+                        cat > deployment/frontend/.env.frontend <<EOF
+        BACKEND_HOST=${BACKEND_HOST}
+        BACKEND_PORT=8081
+        EOF
 
-                        docker compose \
-                            -f docker-compose.frontend.yml up -d
-                    '
+                        ssh -o StrictHostKeyChecking=no \
+                            ec2-user@${FRONTEND_HOST} \
+                            'mkdir -p ~/frontend'
+
+                        scp -o StrictHostKeyChecking=no \
+                            deployment/frontend/docker-compose.frontend.yml \
+                            ec2-user@${FRONTEND_HOST}:~/frontend/
+
+                        scp -o StrictHostKeyChecking=no \
+                            deployment/frontend/.env.frontend \
+                            ec2-user@${FRONTEND_HOST}:~/frontend/
+
+                        ssh -o StrictHostKeyChecking=no \
+                            ec2-user@${FRONTEND_HOST} '
+                                cd ~/frontend
+
+                                chmod 600 .env.frontend
+
+                                docker compose \
+                                    --env-file .env.frontend \
+                                    -f docker-compose.frontend.yml \
+                                    pull
+
+                                docker compose \
+                                    --env-file .env.frontend \
+                                    -f docker-compose.frontend.yml \
+                                    up -d --remove-orphans
+                            '
                     """
                 }
             }
@@ -205,6 +230,7 @@ pipeline {
         }
         always {
             sh '''
+            rm -f deployment/frontend/.env.frontend
             rm -f deployment/monitoring/prometheus.yml
             docker logout || true
             '''

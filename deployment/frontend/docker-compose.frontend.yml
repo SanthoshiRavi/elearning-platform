@@ -4,6 +4,11 @@ services:
 
     restart: unless-stopped
 
+    environment:
+      BACKEND_HOST: ${BACKEND_HOST}
+      BACKEND_PORT: ${BACKEND_PORT}
+      NGINX_ENVSUBST_FILTER: ^BACKEND_
+
     ports:
       - "80:80"
   node-exporter:

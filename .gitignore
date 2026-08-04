@@ -25,3 +25,7 @@ replay_pid*
 
 # Generated prometheus runtime configuration
 deployment/monitoring/prometheus.yml
+.env
+.env.*
+!.env.example
+deployment/frontend/.env.frontend
