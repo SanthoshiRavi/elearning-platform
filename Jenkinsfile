@@ -221,6 +221,7 @@ pipeline {
                   --retry-delay 10 \
                   --retry-connrefused \
                   http://${MONITORING_HOST}:3000/api/health
+                """
 
             }
         }
