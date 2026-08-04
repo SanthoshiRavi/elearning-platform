@@ -84,7 +84,11 @@ pipeline {
         }
         stage('Docker Login') {
             steps {
-                sh 'echo ${DOCKERHUB_TOKEN} | docker login -u ${DOCKERHUB_USERNAME} --password-stdin'
+                sh '''
+                echo "$DOCKERHUB_TOKEN" | docker login \
+                -u "$DOCKERHUB_USERNAME" \
+                --password-stdin
+                '''
             }
         }
         stage('Push Images') {
@@ -98,19 +102,20 @@ pipeline {
                 """
             }
         }
-        stage('Generate Prometheus Configuration')
-        {
+        stage('Generate Prometheus Configuration') {
             steps {
                 sh '''
                 echo "Generating Prometheus configuration..."
-                sed \
-                -e "s|\\${FRONTEND_HOST}|${FRONTEND_HOST}|g" \
-                -e "s|\\${BACKEND_HOST}|${BACKEND_HOST}|g" \
-                -e "s|\\${MONITORING_HOST}|${MONITORING_HOST}|g" \
-                deployment/monitoring/prometheus.yml.template
-                > deployment/monitoring/prometheus.yml
 
-                echo "Prometheus configuration generated successfully."
+                sed \
+                  -e "s|\\${FRONTEND_HOST}|${FRONTEND_HOST}|g" \
+                  -e "s|\\${BACKEND_HOST}|${BACKEND_HOST}|g" \
+                  -e "s|\\${MONITORING_HOST}|${MONITORING_HOST}|g" \
+                  deployment/monitoring/prometheus.yml.template \
+                  > deployment/monitoring/prometheus.yml
+
+                echo "Generated prometheus.yml:"
+                cat deployment/monitoring/prometheus.yml
                 '''
             }
         }
@@ -263,7 +268,7 @@ pipeline {
             steps {
                 sh """
                 echo "Waiting for backend to start..."
-                sleep 60
+                sleep 120
 
                 echo "Checking Backend..."
                 curl \
@@ -299,7 +304,7 @@ pipeline {
             rm -f deployment/frontend/.env.frontend
             rm -f deployment/monitoring/.env.monitoring
             rm -f deployment/monitoring/prometheus.yml
-            docker logout || true
+            docker logout >/dev/null 2>&1 || true
             '''
         }
     }
