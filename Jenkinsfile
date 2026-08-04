@@ -138,10 +138,7 @@ pipeline {
                     sh """
                         echo "Creating frontend runtime configuration..."
 
-                        cat > deployment/frontend/.env.frontend <<EOF
-        BACKEND_HOST=${BACKEND_HOST}
-        BACKEND_PORT=8081
-        EOF
+                        printf "BACKEND_HOST=${BACKEND_HOST}\\nBACKEND_PORT=8081\\n" > deployment/frontend/.env.frontend
 
                         ssh -o StrictHostKeyChecking=no \
                             ec2-user@${FRONTEND_HOST} \
