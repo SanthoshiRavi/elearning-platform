@@ -159,11 +159,13 @@ pipeline {
                                 chmod 600 .env.frontend
 
                                 docker compose \
+                                    -p frontend \
                                     --env-file .env.frontend \
                                     -f docker-compose.frontend.yml \
                                     pull
 
                                 docker compose \
+                                    -p frontend \
                                     --env-file .env.frontend \
                                     -f docker-compose.frontend.yml \
                                     up -d --remove-orphans
