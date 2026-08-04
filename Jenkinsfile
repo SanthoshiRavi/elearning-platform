@@ -270,6 +270,7 @@ pipeline {
         }
         always {
             sh '''
+            rm -f deployment/backend/.env.backend
             rm -f deployment/frontend/.env.frontend
             rm -f deployment/monitoring/prometheus.yml
             docker logout || true
